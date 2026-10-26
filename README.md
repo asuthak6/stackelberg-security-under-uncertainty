@@ -1,54 +1,191 @@
-# Attacker vs Defender: Adaptive Multiagent Security Game
+# SE 4457: Attacker vs. Defender Multiagent Security Game
 
-Small Python prototype for SE 4457 Foundations of Multiagent Systems. This is a prototype rather than a complete Stackelberg equilibrium solver.
+## Project Overview
 
-## Run it
+This project is a Python based multiagent cybersecurity simulation developed for SE 4457: Foundations of Multiagent Systems at Western University.
 
-Requires Python 3.10 or later. No packages to install.
+The simulation involves two autonomous agents, an attacker and a defender, competing in a network environment containing four servers.
 
-From PowerShell in the extracted folder:
+The attacker attempts to disrupt server availability through simulated Distributed Denial of Service (DDoS) attacks, while the defender allocates limited mitigation resources to prevent outages.
 
-```powershell
+The primary objective is to investigate how imperfect perception, autonomous decision making, and adaptive behaviour influence the performance of both agents.
+
+## Current Implementation
+
+### 1. Attacker Agent
+
+The attacker is responsible for selecting a target server and determining the intensity of a simulated DDoS attack.
+
+Its decision making incorporates:
+
+* Noisy observations of the defender's security configuration
+* Estimated protection levels based on previous interactions
+* Expected payoff calculations
+* Exploration of alternative actions
+* Belief updates following attack outcomes
+
+The attacker attempts to maximize its rewards by identifying valuable, potentially vulnerable servers.
+
+### 2. Defender Agent
+
+The defender is responsible for distributing limited mitigation resources across the network.
+
+Its decision making incorporates:
+
+* Server importance and protection priorities
+* Previous attack patterns
+* Available security resources
+* Adaptive resource allocation
+
+The defender attempts to minimize successful attacks and maintain server availability.
+
+### 3. Simulated DDoS Attack
+
+The current implementation models a simplified volumetric traffic flooding attack.
+
+Each server has a base traffic capacity of 5 units.
+
+The attacker selects an intensity of 2, 4, or 6 simulated traffic units, while the defender allocates resources to increase server capacity.
+
+An outage occurs when the attack intensity exceeds the server's effective capacity.
+
+**Note:** This project does not generate actual network traffic or perform real cyberattacks. All attacks are represented through mathematical simulations.
+
+### 4. Multiagent Interaction
+
+Each simulation round follows this sequence:
+
+1. The defender allocates mitigation resources across the servers.
+2. The attacker receives potentially inaccurate observations.
+3. The attacker evaluates possible targets and attack intensities.
+4. The attacker selects an action.
+5. The environment determines whether the attack causes an outage.
+6. Both agents receive feedback and update their internal information.
+7. The process repeats for the specified number of rounds.
+
+This repeated interaction allows the agents to adapt their decisions based on previous outcomes.
+
+## Multiagent Concepts
+
+The project currently demonstrates several concepts from multiagent systems:
+
+| Concept | Implementation |
+|---|---|
+| Autonomy | Both agents independently select actions |
+| Perception | The attacker receives noisy information about defenses |
+| Reasoning | Agents evaluate potential actions using heuristic strategies |
+| Adaptation | Agents update internal information following interactions |
+| Competition | The agents pursue conflicting objectives |
+| Environment | Four simulated servers with resource constraints |
+
+The current agents use adaptive heuristics rather than formal reinforcement learning.
+
+## Technologies
+
+* Python 3.10+
+* Python standard library
+* Object oriented programming
+* CSV for experiment results
+* Git and GitHub for version control
+
+No external Python packages are required.
+
+## Running the Project
+
+### Requirements
+
+Install Python 3.10 or newer.
+
+### Run the default simulation
+
+```bash
 python security_agents.py
 ```
 
-Or experiment:
+### Run 1,000 rounds
 
-```powershell
-python security_agents.py --rounds 1000 --noise 0.4 --budget 2 --output noisy_results.csv
-python security_agents.py --rounds 1000 --noise 0.0 --budget 2 --output clear_results.csv
-python security_agents.py --rounds 1000 --noise 0.4 --budget 2 --no-learning --output baseline.csv
+```bash
+python security_agents.py --rounds 1000
 ```
 
-The script prints a summary and saves per-round data as CSV.
+### Change observation noise
 
-## Where the agents are
+```bash
+python security_agents.py --rounds 1000 --noise 0.5
+```
 
-* `DefenderAgent`: **perception** of attacker history (`attack_counts`), **reasoning** to rank likely losses, **action** to allocate `budget` protection units, **learning** from observed attacks.
-* `AttackerAgent`: **perception** of defender allocations through noisy binary observations, **belief** (`defense_beliefs`) about defended targets, **reasoning** using expected rewards and penalties, **action** to attack one target, **learning** after the outcome. Exploration allows occasional different decisions.
-* `simulate`: environment that organizes simultaneous sequential game rounds, tells each agent only its allowed information, resolves blocked or successful attacks, and awards payoffs.
+### Change defender budget
 
-## Assumptions and current limitations
+```bash
+python security_agents.py --rounds 1000 --budget 2
+```
 
-* Four static targets worth 10, 8, 6 and 4 points. One defender protection unit protects one target in a round. A blocked attack gives attacker -5, a successful attack gives the target value.
-* The defender chooses protection first; the attacker observes **noisy signals** of the allocation, not the true allocation. The attacker learns the truth only for the target it attacked. Defender observes which target was attacked.
-* The agent policies are simple adaptive heuristics, **not** optimal strategies, equilibrium strategies, reinforcement learning, or a mathematically solved Stackelberg game.
-* The attacker sensor noise independently flips each target's defended/not defended status with probability `noise`. At 0.5 it is uninformative; values higher than 0.5 are treated as anti-correlated.
-* The defender can change its allocations across rounds; the attacker learns protection frequencies for targets it actually probes. These learning rules are intentionally simple.
-* Results are stochastic and depend on the seed; one run is not enough to draw research conclusions.
+### Disable learning
 
-## Suggested lab demo
+```bash
+python security_agents.py --no-learning
+```
 
-1. Open `security_agents.py` and point out the **two different agent classes**.
-2. Explain that agents have different goals, state, observations and decisions.
-3. Run `python security_agents.py` and inspect `results.csv`.
-4. Run with different `--noise` values; compare summaries but do not claim a trend from one seed.
-5. State that the next step is repeated trials over many seeds, plots, and better decision-making algorithms.
+### Save results to a custom file
 
-## Next steps
+```bash
+python security_agents.py --output experiment.csv
+```
 
-1. Run multiple seeds per noise/budget setting; report means and uncertainty.
-2. Add graphs for attack rate and payoffs and compare adaptive agents to fixed policies.
-3. Refine belief updates with a Bayesian observation model and test perception assumptions.
-4. Design a principled defender strategy and investigate Stackelberg optimization if relevant to project scope.
-5. Define evaluation hypotheses and document the experiment methodology.
+## Initial Experimental Results
+
+An initial simulation was executed with the following configuration:
+
+| Parameter | Value |
+|---|---|
+| Simulation rounds | 100 |
+| Observation noise | 0.20 |
+| Defender budget | 4 |
+| Server count | 4 |
+| Attack intensities | 2, 4, 6 |
+
+### Results
+
+| Metric | Result |
+|---|---|
+| Service outage rate | 55% |
+| Average attacker payoff | 0.51 |
+
+These results are preliminary and represent one simulation configuration. Additional controlled experiments are required to evaluate the agents' effectiveness.
+
+The simulation saves detailed results to `results.csv` for further analysis.
+
+## Current Limitations
+
+The current prototype has several limitations:
+
+* The network environment is simplified and does not simulate actual network protocols.
+* Only generic volumetric flooding is currently represented.
+* Agent decisions use heuristic strategies rather than advanced reinforcement learning.
+* Additional experiments are needed to assess performance across different configurations.
+* The system does not currently compute a Stackelberg equilibrium.
+
+## Future Development
+
+The next planned improvements include:
+
+1. **Multiple attack types:** Introduce abstract UDP flooding, SYN flooding, and HTTP flooding models.
+2. **Improved attacker reasoning:** Explore Bayesian belief updating to better handle uncertain observations.
+3. **Reinforcement learning:** Investigate Q learning for adaptive attack selection.
+4. **Baseline comparisons:** Compare random, heuristic, and learning based strategies.
+5. **Experimental evaluation:** Test different noise levels, defender budgets, and simulation lengths.
+6. **Visualization:** Generate graphs showing attack success, defender effectiveness, and agent adaptation over time.
+
+## Research Objective
+
+The central research question is:
+
+**How does imperfect perception influence attacker decision making and adaptive defense strategies in a multiagent cybersecurity environment?**
+
+By comparing different reasoning methods, attack strategies, and observation noise levels, the project aims to evaluate how autonomous agents perform when operating under uncertainty.
+
+## Project Status
+
+**Current Stage:** Functional prototype with simulated DDoS attacks and adaptive attacker and defender agents.
+
+**Next Milestone:** Implement additional simulated attack types and conduct controlled comparisons of agent strategies.
