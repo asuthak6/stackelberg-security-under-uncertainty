@@ -1,0 +1,5 @@
+phase,legit_requests,legit_goodput_pct,legit_p50_ms,legit_p95_ms,attack_requests,verdict
+A_baseline,100,100.0,30.8,32.5,0,available
+B_attack,89,24.7,231.1,333.6,9483,OUTAGE
+C_mitigate_capacity,51,70.6,31.9,389.3,7838,available
+D_mitigate_admission,19,36.8,124.3,181.2,2040,OUTAGE
