@@ -106,7 +106,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # --- Capacity (the defender's effective service capacity) -------------
-        acquired = state.slots.acquire(timeout=state.queue_timeout)
+        # Hold a local reference to the semaphore we acquire, so we release the
+        # SAME one even if the server's capacity is resized between measurements.
+        sem = state.slots
+        acquired = sem.acquire(timeout=state.queue_timeout)
         if not acquired:
             # Waited in the queue too long -> the asset is effectively down for
             # this request. This is a real, measured outage, not a formula.
@@ -119,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
             state.bump("served")
             self._respond(200, b"ok\n")
         finally:
-            state.slots.release()
+            sem.release()
 
     def _respond(self, code: int, body: bytes) -> None:
         try:
