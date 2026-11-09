@@ -8,7 +8,7 @@ it makes this a sandbox demonstration rig, not a tool that can attack anyone.
 
 Each request returns a RequestResult so the orchestrator can measure *real*
 latency and *real* success/failure, which is what turns "simulated DDoS" into
-"observed DDoS on infrastructure we own".
+"observed DDoS on local infrastructure".
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from dataclasses import dataclass
 def assert_loopback(host: str) -> None:
     """Raise unless every address `host` resolves to is a loopback address.
 
-    This is the guard that keeps the project legal and self-contained. We never
-    generate load against anything but our own machine.
+    This guard keeps the demo self-contained: load is never generated against
+    anything but the local machine.
     """
     try:
         infos = socket.getaddrinfo(host, None)

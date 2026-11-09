@@ -1,51 +1,70 @@
-"""Shared configuration and the contest helper for the security game.
+"""Game parameters. See DESIGN.md, section "Parameters"."""
 
-One model, one config. The same GameConfig drives the fast formula environment
-and the real-server environment, so the agents never know which backend they are
-playing against.
-"""
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass
 
-DEFAULT_VALUES = (10.0, 8.0, 6.0, 4.0)
 
-
-@dataclass
+@dataclass(frozen=True)
 class GameConfig:
-    values: tuple[float, ...] = DEFAULT_VALUES
-    defender_budget: float = 6.0
-    attacker_budget: float = 6.0
-    resilience: float = 1.0      # k in the contest function (base robustness)
-    block_cost: float = 3.0      # attacker penalty for a blocked attack
-    block_reward: float = 2.0    # defender reward for blocking
-    effort_cost: float = 0.15    # attacker cost per unit of attack
-    noise: float = 0.3           # std-dev of the attacker's observation noise
+    """Immutable (and hashable) parameter set for one game.
+
+    values          server values v_i
+    defense_units   D, integer defense units the defender splits over servers
+    traps           T, number of servers that receive a trap each round
+    attack_units    A, integer attack units the attacker may spend (hold-back allowed)
+    resilience      k, contest constant in a / (a + d + k)
+    catch_prob      c, probability an attack on a trapped server is caught
+    caught_penalty  C, attacker loss when caught
+    catch_reward    R, defender gain when it catches the attacker
+    block_cost      b, attacker loss when an attack is blocked
+    block_reward    r_b, defender gain when it blocks an attack
+    effort_cost     kappa, attacker cost per attack unit spent
+    memory          W, rounds the attacker remembers
+    """
+
+    values: tuple[float, ...] = (10.0, 8.0, 6.0, 4.0)
+    defense_units: int = 4
+    traps: int = 1
+    attack_units: int = 4
+    resilience: float = 1.0
+    catch_prob: float = 1.0
+    caught_penalty: float = 6.0
+    catch_reward: float = 6.0
+    block_cost: float = 1.0
+    block_reward: float = 1.0
+    effort_cost: float = 0.25
+    memory: int = 50
+
+    def __post_init__(self) -> None:
+        # Coerce to a tuple of floats so the config stays hashable for caching.
+        object.__setattr__(self, "values", tuple(float(v) for v in self.values))
+
+        if len(self.values) == 0:
+            raise ValueError("values must contain at least one server")
+        if any(v < 0 for v in self.values):
+            raise ValueError("server values must be non-negative")
+        for name in ("defense_units", "attack_units", "traps", "memory"):
+            if not isinstance(getattr(self, name), int):
+                raise TypeError(f"{name} must be an int")
+        if self.defense_units <= 0:
+            raise ValueError("defense_units must be positive")
+        if self.attack_units <= 0:
+            raise ValueError("attack_units must be positive")
+        if not 0 <= self.traps <= self.n:
+            raise ValueError("traps must satisfy 0 <= traps <= number of servers")
+        if self.resilience < 0:
+            raise ValueError("resilience must be non-negative")
+        if not 0.0 <= self.catch_prob <= 1.0:
+            raise ValueError("catch_prob must be in [0, 1]")
+        for name in ("caught_penalty", "catch_reward", "block_cost",
+                     "block_reward", "effort_cost"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if self.memory <= 0:
+            raise ValueError("memory must be positive")
 
     @property
     def n(self) -> int:
+        """Number of servers."""
         return len(self.values)
-
-
-def success_prob(attack: float, defense: float, k: float) -> float:
-    """Tullock-style contest success probability.
-
-    This is the model's *prediction* of whether an attack overwhelms a server.
-    The live environment measures the same thing on a real server instead; the
-    formula is a fast, analyzable surrogate for that measurement (see MODEL.md).
-    """
-    if attack <= 0:
-        return 0.0
-    return attack / (attack + defense + k)
-
-
-def compositions(total: int, bins: int):
-    """Every way to split `total` units into `bins` ordered non-negative parts."""
-    for cuts in itertools.combinations(range(total + bins - 1), bins - 1):
-        prev, part = -1, []
-        for c in cuts:
-            part.append(c - prev - 1)
-            prev = c
-        part.append(total + bins - 1 - prev - 1)
-        yield part

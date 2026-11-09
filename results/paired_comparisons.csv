@@ -1,0 +1,21 @@
+comparison,defender,attacker,metric,n,mean_diff,ci_low,ci_high,seeds_first_higher,seeds_second_higher,ties
+strategic - naive,sse,strategic vs naive,attacker_payoff,50,-0.039370,-0.126242,0.047502,20,29,1
+strategic - naive,adaptive,strategic vs naive,attacker_payoff,50,2.230540,2.110626,2.350454,50,0,0
+bayesian - naive,sse,bayesian vs naive,attacker_payoff,50,-0.130850,-0.210260,-0.051440,17,33,0
+bayesian - naive,adaptive,bayesian vs naive,attacker_payoff,50,1.433060,1.314990,1.551130,50,0,0
+strategic - bayesian,sse,strategic vs bayesian,attacker_payoff,50,0.091480,-0.002020,0.184980,30,20,0
+strategic - bayesian,adaptive,strategic vs bayesian,attacker_payoff,50,0.797480,0.699938,0.895022,50,0,0
+sse - adaptive,sse vs adaptive,random,defender_payoff,50,0.326320,0.258701,0.393939,48,2,0
+sse - adaptive,sse vs adaptive,naive,defender_payoff,50,-2.177920,-2.287728,-2.068112,0,50,0
+sse - adaptive,sse vs adaptive,bayesian,defender_payoff,50,-0.492880,-0.608984,-0.376776,7,43,0
+sse - adaptive,sse vs adaptive,bayesian_uniform,defender_payoff,50,-0.883840,-0.996631,-0.771049,1,49,0
+sse - adaptive,sse vs adaptive,strategic,defender_payoff,50,0.247760,0.142149,0.353371,38,12,0
+sse - adaptive,sse vs adaptive,strategic_uniform,defender_payoff,50,-1.221360,-1.330903,-1.111817,0,50,0
+sse - adaptive,sse vs adaptive,omniscient,defender_payoff,50,1.007360,0.916636,1.098084,50,0,0
+attacker - equilibrium value,sse,random,attacker_payoff,50,-1.214526,-1.290382,-1.138669,0,50,0
+attacker - equilibrium value,sse,naive,attacker_payoff,50,0.029784,-0.043030,0.102598,27,23,0
+attacker - equilibrium value,sse,bayesian,attacker_payoff,50,-0.101066,-0.182958,-0.019173,21,29,0
+attacker - equilibrium value,sse,bayesian_uniform,attacker_payoff,50,-0.036226,-0.118358,0.045906,21,29,0
+attacker - equilibrium value,sse,strategic,attacker_payoff,50,-0.009586,-0.093982,0.074810,25,25,0
+attacker - equilibrium value,sse,strategic_uniform,attacker_payoff,50,-0.012066,-0.094516,0.070384,19,31,0
+attacker - equilibrium value,sse,omniscient,attacker_payoff,50,0.001494,-0.040652,0.043640,31,19,0

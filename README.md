@@ -1,191 +1,117 @@
-# SE 4457: Attacker vs. Defender Multiagent Security Game
+# SE 4457: Attacker vs. Defender Security Game
 
-## Project Overview
+## Overview
 
-This project is a Python based multiagent cybersecurity simulation developed for SE 4457: Foundations of Multiagent Systems at Western University.
+This project studies how an attacker's perception limits and reasoning style affect its success against a defender who protects servers and sets traps, and whether better reasoning compensates for limited perception. The domain is network defence against DDoS-style attacks on servers. The formal model is a Stackelberg security game with defensive resources and traps (honeypots), played repeatedly. The equilibrium is computed exactly with linear programming, and simulated attackers with different reasoning styles are compared against an equilibrium defender and an adaptive defender over many seeded runs.
 
-The simulation involves two autonomous agents, an attacker and a defender, competing in a network environment containing four servers.
+The full specification is in [DESIGN.md](DESIGN.md).
 
-The attacker attempts to disrupt server availability through simulated Distributed Denial of Service (DDoS) attacks, while the defender allocates limited mitigation resources to prevent outages.
+## The game in brief
 
-The primary objective is to investigate how imperfect perception, autonomous decision making, and adaptive behaviour influence the performance of both agents.
+- **Servers:** 4 servers with values v = (10, 8, 6, 4).
+- **Defender (leader):** each round places D = 4 defense units over the servers and T = 1 trap on one server (140 pure strategies). It commits to a mixed strategy over these.
+- **Attacker (follower):** each round splits up to A = 4 attack units over the servers and may hold units back (70 allocations). It commits before seeing the round's defense or trap.
+- **Outcome on each attacked server:** if trapped, the attacker is caught (probability c = 1). Otherwise the server is taken down with probability a / (a + d + 1), and the attack is blocked otherwise.
 
-## Current Implementation
+| Outcome per attacked server | Attacker | Defender |
+|---|---|---|
+| Server taken down | +v_i | -v_i |
+| Caught by trap | -6 | +6 |
+| Blocked | -1 | +1 |
+| Effort (always) | -0.25 per attack unit | 0 |
 
-### 1. Attacker Agent
+**Observations.** Before acting, the attacker has only its memory of the last 50 rounds. After a round it sees the realized defense on every server, and whether each server it attacked was trapped; it never learns about traps on servers it did not attack. The defender sees the full attack and the outcomes.
 
-The attacker is responsible for selecting a target server and determining the intensity of a simulated DDoS attack.
+## Agents
 
-Its decision making incorporates:
-
-* Noisy observations of the defender's security configuration
-* Estimated protection levels based on previous interactions
-* Expected payoff calculations
-* Exploration of alternative actions
-* Belief updates following attack outcomes
-
-The attacker attempts to maximize its rewards by identifying valuable, potentially vulnerable servers.
-
-### 2. Defender Agent
-
-The defender is responsible for distributing limited mitigation resources across the network.
-
-Its decision making incorporates:
-
-* Server importance and protection priorities
-* Previous attack patterns
-* Available security resources
-* Adaptive resource allocation
-
-The defender attempts to minimize successful attacks and maintain server availability.
-
-### 3. Simulated DDoS Attack
-
-The current implementation models a simplified volumetric traffic flooding attack.
-
-Each server has a base traffic capacity of 5 units.
-
-The attacker selects an intensity of 2, 4, or 6 simulated traffic units, while the defender allocates resources to increase server capacity.
-
-An outage occurs when the attack intensity exceeds the server's effective capacity.
-
-**Note:** This project does not generate actual network traffic or perform real cyberattacks. All attacks are represented through mathematical simulations.
-
-### 4. Multiagent Interaction
-
-Each simulation round follows this sequence:
-
-1. The defender allocates mitigation resources across the servers.
-2. The attacker receives potentially inaccurate observations.
-3. The attacker evaluates possible targets and attack intensities.
-4. The attacker selects an action.
-5. The environment determines whether the attack causes an outage.
-6. Both agents receive feedback and update their internal information.
-7. The process repeats for the specified number of rounds.
-
-This repeated interaction allows the agents to adapt their decisions based on previous outcomes.
-
-## Multiagent Concepts
-
-The project currently demonstrates several concepts from multiagent systems:
-
-| Concept | Implementation |
+| Agent | Behaviour |
 |---|---|
-| Autonomy | Both agents independently select actions |
-| Perception | The attacker receives noisy information about defenses |
-| Reasoning | Agents evaluate potential actions using heuristic strategies |
-| Adaptation | Agents update internal information following interactions |
-| Competition | The agents pursue conflicting objectives |
-| Environment | Four simulated servers with resource constraints |
+| SSE defender | Plays the Strong Stackelberg Equilibrium mixed strategy every round; does not learn |
+| Adaptive defender | Traps servers in proportion to smoothed recent attack frequency and leaves the trapped server undefended (lure) |
+| Random attacker | Uniform over the 70 allocations |
+| Naive attacker | Empirical trap rate per (server, defense level) cell; untested cells are assumed safe |
+| Bayesian attacker | Beta posterior per cell with an informed prior (mean T/N); Thompson sampling |
+| Strategic attacker | Models the adaptive defender's lure rule and averages that prediction with the Bayesian posterior mean |
+| Omniscient attacker | Knows the defender's current mixed strategy and best-responds exactly (benchmark) |
 
-The current agents use adaptive heuristics rather than formal reinforcement learning.
+The variants `bayesian_uniform` and `strategic_uniform` use a uniform Beta(1, 1) prior instead of the informed prior.
 
-## Technologies
+## Repository structure
 
-* Python 3.10+
-* Python standard library
-* Object oriented programming
-* CSV for experiment results
-* Git and GitHub for version control
-
-No external Python packages are required.
-
-## Running the Project
-
-### Requirements
-
-Install Python 3.10 or newer.
-
-### Run the default simulation
-
-```bash
-python security_agents.py
-```
-
-### Run 1,000 rounds
-
-```bash
-python security_agents.py --rounds 1000
-```
-
-### Change observation noise
-
-```bash
-python security_agents.py --rounds 1000 --noise 0.5
-```
-
-### Change defender budget
-
-```bash
-python security_agents.py --rounds 1000 --budget 2
-```
-
-### Disable learning
-
-```bash
-python security_agents.py --no-learning
-```
-
-### Save results to a custom file
-
-```bash
-python security_agents.py --output experiment.csv
-```
-
-## Initial Experimental Results
-
-An initial simulation was executed with the following configuration:
-
-| Parameter | Value |
+| Path | Content |
 |---|---|
-| Simulation rounds | 100 |
-| Observation noise | 0.20 |
-| Defender budget | 4 |
-| Server count | 4 |
-| Attack intensities | 2, 4, 6 |
+| `DESIGN.md` | Full model, agents, solver, experiments, parameters |
+| `security_game/config.py` | `GameConfig`: game parameters with validation |
+| `security_game/model.py` | Strategy spaces, outcome probabilities, expected and realized payoffs |
+| `security_game/solver.py` | Strong Stackelberg Equilibrium (multiple-LP) and mixed-strategy helpers |
+| `security_game/inspect_equilibrium.py` | Command-line summary of the equilibrium |
+| `security_game/defenders.py` | SSE and adaptive defenders |
+| `security_game/attackers.py` | Random, naive, Bayesian, strategic, omniscient attackers |
+| `security_game/game.py` | Repeated game loop, per-run summary metrics, command-line single run |
+| `security_game/experiments.py` | Experiments E1-E6, paired comparisons, figures, summary tables |
+| `tests/` | pytest suite |
+| `results/` | Experiment outputs (CSV, PNG, summary.md) |
+| `extras/live_demo/` | Archived earlier prototype (see below) |
+| `requirements.txt`, `pyproject.toml` | Dependencies and pytest configuration |
 
-### Results
+## Setup
 
-| Metric | Result |
-|---|---|
-| Service outage rate | 55% |
-| Average attacker payoff | 0.51 |
+Requires Python 3.10 or newer.
 
-These results are preliminary and represent one simulation configuration. Additional controlled experiments are required to evaluate the agents' effectiveness.
+Windows (PowerShell):
 
-The simulation saves detailed results to `results.csv` for further analysis.
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-## Current Limitations
+macOS / Linux:
 
-The current prototype has several limitations:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-* The network environment is simplified and does not simulate actual network protocols.
-* Only generic volumetric flooding is currently represented.
-* Agent decisions use heuristic strategies rather than advanced reinforcement learning.
-* Additional experiments are needed to assess performance across different configurations.
-* The system does not currently compute a Stackelberg equilibrium.
+## How to run
 
-## Future Development
+All commands are run from the repository root.
 
-The next planned improvements include:
+```bash
+# Tests
+pytest -q
 
-1. **Multiple attack types:** Introduce abstract UDP flooding, SYN flooding, and HTTP flooding models.
-2. **Improved attacker reasoning:** Explore Bayesian belief updating to better handle uncertain observations.
-3. **Reinforcement learning:** Investigate Q learning for adaptive attack selection.
-4. **Baseline comparisons:** Compare random, heuristic, and learning based strategies.
-5. **Experimental evaluation:** Test different noise levels, defender budgets, and simulation lengths.
-6. **Visualization:** Generate graphs showing attack success, defender effectiveness, and agent adaptation over time.
+# Equilibrium summary (options: --traps, --caught-penalty, --catch-reward,
+# --defense-units, --attack-units, --catch-prob)
+python -m security_game.inspect_equilibrium
+python -m security_game.inspect_equilibrium --traps 2
 
-## Research Objective
+# One game with a chosen pair of agents
+python -m security_game.game --defender adaptive --attacker strategic --rounds 500 --seed 0
 
-The central research question is:
+# All experiments (default 50 seeds x 500 rounds, written to results/)
+python -m security_game.experiments
 
-**How does imperfect perception influence attacker decision making and adaptive defense strategies in a multiagent cybersecurity environment?**
+# Quick check (3 seeds x 60 rounds)
+python -m security_game.experiments --quick --out results_quick
+```
 
-By comparing different reasoning methods, attack strategies, and observation noise levels, the project aims to evaluate how autonomous agents perform when operating under uncertainty.
+Defender names: `sse`, `adaptive`. Attacker names: `random`, `naive`, `bayesian`, `bayesian_uniform`, `strategic`, `strategic_uniform`, `omniscient`.
 
-## Project Status
+The full experiment run took about 8 minutes (465 s) on the development laptop (single process). The quick run takes a few seconds.
 
-**Current Stage:** Functional prototype with simulated DDoS attacks and adaptive attacker and defender agents.
+## Outputs
 
-**Next Milestone:** Implement additional simulated attack types and conduct controlled comparisons of agent strategies.
+`python -m security_game.experiments` writes to `results/`:
+
+- `config.json`: parameters, seeds, rounds, and the SSE values used.
+- Per-seed and summary CSV files for E1 (main grid), E3 (value of traps), and E6 (memory robustness); a per-round summary for E2 (learning over time); `paired_comparisons.csv`.
+- `summary.md`: auto-generated tables of the main numbers.
+- Figures `fig_e1a` to `fig_e6` (PNG, 150 dpi) with 95% confidence intervals.
+
+See DESIGN.md, Section 8, for what each experiment and file contains.
+
+## Archived prototype
+
+`extras/live_demo/` holds the earlier prototype, including a real loopback HTTP server used as a DDoS environment. It is not maintained against the current model; see its README for how to run it.
