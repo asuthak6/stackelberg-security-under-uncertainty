@@ -1,0 +1,10 @@
+memory,defender,attacker,metric,n,mean,ci_low,ci_high
+10,adaptive,naive,attacker_payoff,50,-0.281000,-0.348530,-0.213470
+10,adaptive,bayesian,attacker_payoff,50,-0.433200,-0.512516,-0.353884
+10,adaptive,strategic,attacker_payoff,50,0.027910,-0.044536,0.100356
+50,adaptive,naive,attacker_payoff,50,-1.607900,-1.694386,-1.521414
+50,adaptive,bayesian,attacker_payoff,50,-0.174840,-0.250508,-0.099172
+50,adaptive,strategic,attacker_payoff,50,0.622640,0.541311,0.703969
+200,adaptive,naive,attacker_payoff,50,-0.704270,-0.786969,-0.621571
+200,adaptive,bayesian,attacker_payoff,50,0.030800,-0.035502,0.097102
+200,adaptive,strategic,attacker_payoff,50,0.829640,0.756145,0.903135

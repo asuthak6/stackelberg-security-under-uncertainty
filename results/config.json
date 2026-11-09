@@ -1,0 +1,56 @@
+{
+  "game": {
+    "values": [
+      10.0,
+      8.0,
+      6.0,
+      4.0
+    ],
+    "defense_units": 4,
+    "traps": 1,
+    "attack_units": 4,
+    "resilience": 1.0,
+    "catch_prob": 1.0,
+    "caught_penalty": 6.0,
+    "catch_reward": 6.0,
+    "block_cost": 1.0,
+    "block_reward": 1.0,
+    "effort_cost": 0.25,
+    "memory": 50
+  },
+  "seeds": 50,
+  "rounds": 500,
+  "quick": false,
+  "attackers": [
+    "random",
+    "naive",
+    "bayesian",
+    "bayesian_uniform",
+    "strategic",
+    "strategic_uniform",
+    "omniscient"
+  ],
+  "defenders": [
+    "sse",
+    "adaptive"
+  ],
+  "rolling_window": 25,
+  "trap_counts": [
+    0,
+    1,
+    2
+  ],
+  "memory_windows": [
+    10,
+    50,
+    200
+  ],
+  "sse_defender_value": -1.1343058663569674,
+  "sse_attacker_value": 0.3843058663569673,
+  "sse_response": [
+    0,
+    0,
+    0,
+    3
+  ]
+}

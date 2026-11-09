@@ -1,10 +1,10 @@
 """Strong Stackelberg Equilibrium for the single-target coverage baseline.
 
-This is the *solvable anchor* of our project: the simplest honest version of the
+This is the solvable anchor of the prototype: the simplest version of the
 attacker/defender game, for which an exact optimal defender strategy can be
-computed. The full game (security_game.py) is richer -- distributed attacks,
+computed. The full prototype game (game.py) is richer -- distributed attacks,
 noisy observation, traps, learning -- and is studied by simulation. This file
-gives us the theoretical optimum to compare those simulations against.
+gives the theoretical optimum to compare those simulations against.
 
 THE GAME (one shot, perfect information)
 ----------------------------------------
@@ -23,7 +23,7 @@ THE GAME (one shot, perfect information)
 STRONG STACKELBERG EQUILIBRIUM (SSE)
 ------------------------------------
 The defender wants the coverage c that maximizes its own payoff, anticipating
-that the attacker will then attack its best-response target. We find it with the
+that the attacker will then attack its best-response target. It is found with the
 classic MULTIPLE-LP method (Conitzer & Sandholm): assume in turn that each
 target t is the one the attacker ends up attacking, and solve a linear program
 for the best coverage that makes t a best response. Pick the best t.
@@ -37,7 +37,7 @@ For a fixed "attacked target" t, the LP is:
                0 <= c_i <= 1
 
 Both the objective and all constraints are linear in c, so each is a small LP.
-We solve N of them (one per possible attacked target) and keep the best.
+N of them are solved (one per possible attacked target) and the best is kept.
 
 Needs scipy (pip install scipy).
 """
@@ -50,7 +50,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 
-# Default instance: four servers, same values as the original project.
+# Default instance: four servers with the prototype's values.
 DEFAULT_VALUES = (10.0, 8.0, 6.0, 4.0)
 
 
@@ -73,10 +73,10 @@ def solve_sse(values=DEFAULT_VALUES, budget: float = 2.0, penalty: float = 1.0) 
     best: SSEResult | None = None
 
     for t in range(n):
-        # linprog MINIMIZES c . x, so we minimize the NEGATIVE of defender payoff.
+        # linprog MINIMIZES c . x, so minimize the NEGATIVE of defender payoff.
         # Defender payoff if t is attacked: (1-c_t)*(-v_t) + c_t*penalty
-        #   = -v_t + c_t*(v_t + penalty).  Only c_t varies; -v_t is a constant we
-        #   must add back when reporting the payoff and when comparing targets.
+        #   = -v_t + c_t*(v_t + penalty).  Only c_t varies; -v_t is a constant that
+        #   must be added back when reporting the payoff and when comparing targets.
         obj = np.zeros(n)
         obj[t] = -(values[t] + penalty)  # minimizing this maximizes c_t
         const = -values[t]               # the constant part of the defender payoff

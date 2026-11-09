@@ -3,11 +3,11 @@
 This is a genuine socket server (it really accepts TCP connections and really
 serves HTTP), but it only ever listens on 127.0.0.1, so the only thing that can
 reach it is another process on this same machine. That is what makes the
-"attack" in this project legal and self-contained: we flood a server we own,
+"attack" in this project legal and self-contained: the flood targets a local server,
 over the loopback interface, and nothing leaves the laptop.
 
 Two knobs model the defender's mitigation budget, and both affect real behaviour
-that we measure rather than assume:
+that is measured rather than assumed:
 
 1. capacity  -- the number of requests the backend can process *at the same
                 time*. Implemented as a semaphore with `capacity` slots. Each
@@ -77,7 +77,7 @@ class ServerState:
         self.slots = threading.BoundedSemaphore(capacity)
         self.bucket = TokenBucket(rate_limit)
         # Live counters (atomic enough under CPython's GIL for integer += here,
-        # but we guard with a lock to be correct about it).
+        # but guarded with a lock to be correct about it).
         self._lock = threading.Lock()
         self.served = 0       # 200 OK
         self.rejected = 0     # 429 (rate limited)
@@ -92,7 +92,7 @@ class Handler(BaseHTTPRequestHandler):
     # Injected by the factory below.
     state: ServerState
 
-    # Silence the default per-request stderr logging; we do our own accounting.
+    # Silence the default per-request stderr logging; accounting is done separately.
     def log_message(self, *args) -> None:  # noqa: D401, ANN002
         return
 
@@ -106,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # --- Capacity (the defender's effective service capacity) -------------
-        # Hold a local reference to the semaphore we acquire, so we release the
+        # Hold a local reference to the acquired semaphore, so the release uses the
         # SAME one even if the server's capacity is resized between measurements.
         sem = state.slots
         acquired = sem.acquire(timeout=state.queue_timeout)
@@ -132,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
-            # Client gave up (timed out and hung up) while we were replying.
+            # Client gave up (timed out and hung up) during the reply.
             # Under a flood this is normal; just drop it.
             pass
 

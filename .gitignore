@@ -1,4 +1,6 @@
-__pycache__/G
+__pycache__/
 *.pyc
-results.csv
+.pytest_cache/
 .venv/
+venv/
+results_quick/

@@ -1,117 +1,139 @@
-"""The game loop. It runs the agents against ANY environment.
+"""Repeated game loop. See DESIGN.md, section "Repeated game and perception".
 
-This is the single model. The environment answers "did the attack succeed?"
-(by formula or by real measurement); everything else here -- the agents, the
-payoffs, the learning, the round structure -- is identical either way. That is
-what makes the fast simulation and the live demo the same game, not two.
-
-Payoffs are computed HERE, at the model level, from the environment's per-server
-outcomes -- so they mean the same thing whichever backend produced the outcome:
-    success : attacker +v_i,       defender -v_i
-    blocked : attacker -block_cost, defender +block_reward
-    effort  : attacker -effort_cost * a_i   (always)
+Usage: python -m security_game.game --defender adaptive --attacker naive --rounds 500 --seed 0
 """
+
 from __future__ import annotations
 
 import argparse
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from config import GameConfig
-from agents import Attacker, Defender
-from environment import Environment, FormulaEnvironment
+from .attackers import (
+    Attacker,
+    BayesianAttacker,
+    NaiveAttacker,
+    Observation,
+    OmniscientAttacker,
+    RandomAttacker,
+    StrategicAttacker,
+)
+from .config import GameConfig
+from .defenders import AdaptiveDefender, Defender, SSEDefender
+from .model import AttackAlloc, Outcome, realized_payoffs, sample_outcomes
+
+DEFENDERS = {"sse": SSEDefender, "adaptive": AdaptiveDefender}
+ATTACKERS = ("random", "naive", "bayesian", "strategic", "omniscient",
+             "bayesian_uniform", "strategic_uniform")
 
 
-@dataclass
+@dataclass(frozen=True)
 class RoundLog:
-    rnd: int
-    defense: list[float]
-    attack: list[float]
-    successes: list[int]
+    round: int
+    defense: tuple[int, ...]
+    traps: tuple[int, ...]
+    attack: AttackAlloc
+    outcomes: tuple[Outcome, ...]
     attacker_payoff: float
     defender_payoff: float
-    value_captured: float
 
 
-def _payoffs(cfg: GameConfig, attack: list[float], successes: list[int]):
-    a_pay = d_pay = captured = 0.0
-    for i in range(cfg.n):
-        a_pay -= cfg.effort_cost * attack[i]
-        if attack[i] <= 0:
-            continue
-        if successes[i]:
-            a_pay += cfg.values[i]
-            d_pay -= cfg.values[i]
-            captured += cfg.values[i]
-        else:
-            a_pay -= cfg.block_cost
-            d_pay += cfg.block_reward
-    return a_pay, d_pay, captured
+def make_defender(name: str, cfg: GameConfig) -> Defender:
+    try:
+        return DEFENDERS[name](cfg)
+    except KeyError:
+        raise ValueError(f"unknown defender {name!r}") from None
 
 
-def play(cfg: GameConfig, env: Environment, rounds: int, defender: Defender,
-         attacker: Attacker, seed: int = 0) -> list[RoundLog]:
-    """Run `rounds` of the game. `env` resolves each round (formula or live)."""
-    rng = random.Random(seed)
-    logs: list[RoundLog] = []
-    for r in range(1, rounds + 1):
-        defense = defender.allocate(rng)              # leader commits
-        observed = attacker.perceive(defense, rng)    # noisy observation
-        attack = attacker.choose(observed, rng)       # follower best-responds
-        successes = env.resolve(defense, attack, rng)  # formula OR real server
-        a_pay, d_pay, captured = _payoffs(cfg, attack, successes)
-        logs.append(RoundLog(r, defense, attack, successes, a_pay, d_pay, captured))
-        defender.learn(attack)                        # both adapt
+def make_attacker(name: str, cfg: GameConfig, defender: Defender) -> Attacker:
+    if name == "omniscient":
+        return OmniscientAttacker(cfg, defender)
+    if name in ("random", "naive"):
+        return {"random": RandomAttacker, "naive": NaiveAttacker}[name](cfg)
+    base, _, prior = name.partition("_")
+    classes = {"bayesian": BayesianAttacker, "strategic": StrategicAttacker}
+    if base not in classes or prior not in ("", "uniform"):
+        raise ValueError(f"unknown attacker {name!r}")
+    return classes[base](cfg, prior=prior or "informed")
+
+
+def play(cfg: GameConfig, defender: Defender, attacker: Attacker,
+         rounds: int, seed: int) -> list[RoundLog]:
+    """Play ``rounds`` rounds and return one log entry per round."""
+    def_rng = random.Random(f"defender:{seed}")
+    att_rng = random.Random(f"attacker:{seed}")
+    env_rng = random.Random(f"environment:{seed}")
+
+    logs = []
+    for t in range(rounds):
+        defense, traps = defender.pure_strategies[defender.act(def_rng)]
+        attack = attacker.act(att_rng)
+        outcomes = sample_outcomes(cfg, defense, traps, attack, env_rng)
+        u_att, u_def = realized_payoffs(cfg, attack, outcomes)
+        trap_set = set(traps)
+        trap_seen = {i: i in trap_set for i in range(cfg.n) if attack[i] > 0}
+        attacker.observe(Observation(defense=defense, trap_seen=trap_seen,
+                                     outcomes=outcomes, attack=attack))
+        defender.observe(attack, outcomes)
+        logs.append(RoundLog(t, defense, traps, attack, outcomes, u_att, u_def))
     return logs
 
 
-def summarize(logs: list[RoundLog]) -> dict:
+def summarize(logs: list[RoundLog]) -> dict[str, float]:
+    """Per-run metrics. Rates are NaN when their denominator is zero."""
+    attacked = catches = successes = attack_rounds = 0
+    undefended = undefended_catches = defended = defended_successes = 0
+    for log in logs:
+        hit = False
+        for i, outcome in enumerate(log.outcomes):
+            if outcome is Outcome.NOT_ATTACKED:
+                continue
+            hit = True
+            attacked += 1
+            caught = outcome is Outcome.CAUGHT
+            success = outcome is Outcome.SUCCESS
+            catches += caught
+            successes += success
+            if log.defense[i] == 0:
+                undefended += 1
+                undefended_catches += caught
+            else:
+                defended += 1
+                defended_successes += success
+        attack_rounds += hit
+
+    def ratio(a: int, b: int) -> float:
+        return a / b if b else float("nan")
+
     n = len(logs)
-    attacked = sum(1 for lg in logs for a in lg.attack if a > 1e-6)
-    succ = sum(sum(lg.successes) for lg in logs)
     return {
-        "rounds": n,
-        "attacker_payoff_avg": sum(lg.attacker_payoff for lg in logs) / n,
-        "defender_payoff_avg": sum(lg.defender_payoff for lg in logs) / n,
-        "value_captured_avg": sum(lg.value_captured for lg in logs) / n,
-        "attacks_launched": attacked,
-        "attacks_succeeded": succ,
-        "success_rate": (succ / attacked) if attacked else 0.0,
+        "attacker_payoff": sum(l.attacker_payoff for l in logs) / n,
+        "defender_payoff": sum(l.defender_payoff for l in logs) / n,
+        "catch_rate": ratio(catches, attacked),
+        "takedown_rate": ratio(successes, attacked),
+        "attack_share": attack_rounds / n,
+        "undefended_attack_share": ratio(undefended, attacked),
+        "undefended_catch_rate": ratio(undefended_catches, undefended),
+        "defended_takedown_rate": ratio(defended_successes, defended),
     }
 
 
-def make_defender(cfg: GameConfig, strategy: str) -> Defender:
-    d = Defender(cfg, strategy=strategy)
-    if strategy == "sse":
-        from baseline import solve_sse
-        d._sse_shape = list(solve_sse(cfg.values, min(2.0, cfg.n - 0.5), 1.0).coverage)
-    return d
-
-
 def main() -> None:
-    p = argparse.ArgumentParser(description="Run the security game on the FORMULA environment")
-    p.add_argument("--rounds", type=int, default=300)
-    p.add_argument("--noise", type=float, default=0.3)
-    p.add_argument("--defender", choices=["adaptive", "sse", "uniform"], default="adaptive")
-    p.add_argument("--attacker", choices=["distributed", "single", "random"], default="distributed")
+    p = argparse.ArgumentParser(description="Play the repeated security game")
+    p.add_argument("--defender", choices=sorted(DEFENDERS), default="adaptive")
+    p.add_argument("--attacker", choices=ATTACKERS, default="naive")
+    p.add_argument("--rounds", type=int, default=500)
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
 
-    cfg = GameConfig(noise=args.noise)
-    env = FormulaEnvironment(cfg)
-    defender = make_defender(cfg, args.defender)
-    attacker = Attacker(cfg, mode=args.attacker)
-    s = summarize(play(cfg, env, args.rounds, defender, attacker, args.seed))
-
-    print(f"Security game (FORMULA environment) - defender={args.defender}, "
-          f"attacker={args.attacker}, noise={args.noise}")
-    print(f"  rounds: {s['rounds']}")
-    print(f"  attacker payoff / round : {s['attacker_payoff_avg']:+.2f}")
-    print(f"  defender payoff / round : {s['defender_payoff_avg']:+.2f}")
-    print(f"  attack success rate     : {s['success_rate']:.1%} "
-          f"({s['attacks_succeeded']}/{s['attacks_launched']})")
-    print("\n  (This is the fast backend. For the real-server backend, see run_live.py;\n"
-          "   for formula-vs-real agreement, see validate.py.)")
+    cfg = GameConfig()
+    defender = make_defender(args.defender, cfg)
+    attacker = make_attacker(args.attacker, cfg, defender)
+    summary = summarize(play(cfg, defender, attacker, args.rounds, args.seed))
+    print(f"{args.attacker} attacker vs {args.defender} defender, "
+          f"{args.rounds} rounds, seed {args.seed}")
+    for key, value in summary.items():
+        print(f"  {key:<26}{value:>8.3f}")
 
 
 if __name__ == "__main__":

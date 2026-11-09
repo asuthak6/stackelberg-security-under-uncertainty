@@ -9,8 +9,8 @@ This is the script that proves the two backends are ONE model. For a grid of
   3. reports how closely the fitted formula a/(a+d+k) matches the measured curve.
 
 A close match means the formula is a trustworthy fast surrogate for the real
-system: we can solve for equilibrium and run thousands of rounds on the formula
-(game.py, experiments.py) knowing it behaves like the real server (run_live.py).
+system: the equilibrium can be solved and thousands of rounds run on the formula
+(game.py, experiments.py), knowing it behaves like the real server (run_live.py).
 
     python validate.py            # ~1 min
     python validate.py --trials 12 --duration 0.5
