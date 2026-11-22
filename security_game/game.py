@@ -8,10 +8,12 @@ from __future__ import annotations
 import argparse
 import random
 from dataclasses import dataclass
+from typing import Callable
 
 from .attackers import (
     Attacker,
     BayesianAttacker,
+    LearnedStrategicAttacker,
     NaiveAttacker,
     Observation,
     OmniscientAttacker,
@@ -24,7 +26,7 @@ from .model import AttackAlloc, Outcome, realized_payoffs, sample_outcomes
 
 DEFENDERS = {"sse": SSEDefender, "adaptive": AdaptiveDefender}
 ATTACKERS = ("random", "naive", "bayesian", "strategic", "omniscient",
-             "bayesian_uniform", "strategic_uniform")
+             "bayesian_uniform", "strategic_uniform", "strategic_learned")
 
 
 @dataclass(frozen=True)
@@ -45,27 +47,39 @@ def make_defender(name: str, cfg: GameConfig) -> Defender:
         raise ValueError(f"unknown defender {name!r}") from None
 
 
-def make_attacker(name: str, cfg: GameConfig, defender: Defender) -> Attacker:
+def make_attacker(name: str, cfg: GameConfig, defender: Defender, **kwargs) -> Attacker:
+    """Build an attacker by name. Extra keyword arguments go to the attacker's
+    constructor (e.g. model_rate / model_floor for the strategic attacker)."""
     if name == "omniscient":
-        return OmniscientAttacker(cfg, defender)
+        return OmniscientAttacker(cfg, defender, **kwargs)
     if name in ("random", "naive"):
-        return {"random": RandomAttacker, "naive": NaiveAttacker}[name](cfg)
+        return {"random": RandomAttacker, "naive": NaiveAttacker}[name](cfg, **kwargs)
+    if name == "strategic_learned":
+        return LearnedStrategicAttacker(cfg, **kwargs)
     base, _, prior = name.partition("_")
     classes = {"bayesian": BayesianAttacker, "strategic": StrategicAttacker}
     if base not in classes or prior not in ("", "uniform"):
         raise ValueError(f"unknown attacker {name!r}")
-    return classes[base](cfg, prior=prior or "informed")
+    return classes[base](cfg, prior=prior or "informed", **kwargs)
 
 
 def play(cfg: GameConfig, defender: Defender, attacker: Attacker,
-         rounds: int, seed: int) -> list[RoundLog]:
-    """Play ``rounds`` rounds and return one log entry per round."""
+         rounds: int, seed: int,
+         before_round: Callable[[int], None] | None = None) -> list[RoundLog]:
+    """Play ``rounds`` rounds and return one log entry per round.
+
+    ``before_round(t)``, if given, is called at the start of round t, before
+    either agent acts. It may inspect the agents' state but must not change it;
+    it draws no random numbers, so the game is unchanged.
+    """
     def_rng = random.Random(f"defender:{seed}")
     att_rng = random.Random(f"attacker:{seed}")
     env_rng = random.Random(f"environment:{seed}")
 
     logs = []
     for t in range(rounds):
+        if before_round is not None:
+            before_round(t)
         defense, traps = defender.pure_strategies[defender.act(def_rng)]
         attack = attacker.act(att_rng)
         outcomes = sample_outcomes(cfg, defense, traps, attack, env_rng)
@@ -79,11 +93,23 @@ def play(cfg: GameConfig, defender: Defender, attacker: Attacker,
     return logs
 
 
-def summarize(logs: list[RoundLog]) -> dict[str, float]:
-    """Per-run metrics. Rates are NaN when their denominator is zero."""
+def summarize(logs: list[RoundLog], per_server: bool = False) -> dict[str, float]:
+    """Per-run metrics. Rates are NaN when their denominator is zero.
+
+    With per_server=True, also per server i (1-based in the key):
+    attack_unit_share_s{i}, the share of all attack units over the run sent to
+    server i (NaN if no units were sent), and attack_rate_s{i}, the share of
+    rounds in which server i was attacked.
+    """
     attacked = catches = successes = attack_rounds = 0
     undefended = undefended_catches = defended = defended_successes = 0
+    n_servers = len(logs[0].attack) if logs else 0
+    units = [0] * n_servers
+    rounds_hit = [0] * n_servers
     for log in logs:
+        for i, a in enumerate(log.attack):
+            units[i] += a
+            rounds_hit[i] += a > 0
         hit = False
         for i, outcome in enumerate(log.outcomes):
             if outcome is Outcome.NOT_ATTACKED:
@@ -106,7 +132,7 @@ def summarize(logs: list[RoundLog]) -> dict[str, float]:
         return a / b if b else float("nan")
 
     n = len(logs)
-    return {
+    summary = {
         "attacker_payoff": sum(l.attacker_payoff for l in logs) / n,
         "defender_payoff": sum(l.defender_payoff for l in logs) / n,
         "catch_rate": ratio(catches, attacked),
@@ -116,6 +142,12 @@ def summarize(logs: list[RoundLog]) -> dict[str, float]:
         "undefended_catch_rate": ratio(undefended_catches, undefended),
         "defended_takedown_rate": ratio(defended_successes, defended),
     }
+    if per_server:
+        for i in range(n_servers):
+            summary[f"attack_unit_share_s{i + 1}"] = ratio(units[i], sum(units))
+        for i in range(n_servers):
+            summary[f"attack_rate_s{i + 1}"] = rounds_hit[i] / n
+    return summary
 
 
 def main() -> None:

@@ -1,0 +1,21 @@
+model_rate,defender,comparison,metric,n,mean_diff,ci_low,ci_high,seeds_first_higher,seeds_second_higher,ties
+0.050000,sse,strategic - naive,attacker_payoff,50,-0.063440,-0.145856,0.018976,21,29,0
+0.050000,sse,strategic - bayesian,attacker_payoff,50,0.067410,-0.013017,0.147837,29,21,0
+0.100000,sse,strategic - naive,attacker_payoff,50,-0.102720,-0.175195,-0.030245,16,33,1
+0.100000,sse,strategic - bayesian,attacker_payoff,50,0.028130,-0.063124,0.119384,26,23,1
+0.200000,sse,strategic - naive,attacker_payoff,50,-0.039370,-0.126242,0.047502,20,29,1
+0.200000,sse,strategic - bayesian,attacker_payoff,50,0.091480,-0.002020,0.184980,30,20,0
+0.400000,sse,strategic - naive,attacker_payoff,50,-0.054690,-0.133423,0.024043,23,27,0
+0.400000,sse,strategic - bayesian,attacker_payoff,50,0.076160,-0.027302,0.179622,27,23,0
+0.800000,sse,strategic - naive,attacker_payoff,50,-0.242730,-0.329540,-0.155920,12,38,0
+0.800000,sse,strategic - bayesian,attacker_payoff,50,-0.111880,-0.206012,-0.017748,16,34,0
+0.050000,adaptive,strategic - naive,attacker_payoff,50,2.075990,1.960610,2.191370,50,0,0
+0.050000,adaptive,strategic - bayesian,attacker_payoff,50,0.642930,0.541511,0.744349,48,2,0
+0.100000,adaptive,strategic - naive,attacker_payoff,50,2.130310,2.029871,2.230749,50,0,0
+0.100000,adaptive,strategic - bayesian,attacker_payoff,50,0.697250,0.604589,0.789911,50,0,0
+0.200000,adaptive,strategic - naive,attacker_payoff,50,2.230540,2.110626,2.350454,50,0,0
+0.200000,adaptive,strategic - bayesian,attacker_payoff,50,0.797480,0.699938,0.895022,50,0,0
+0.400000,adaptive,strategic - naive,attacker_payoff,50,2.246050,2.127659,2.364441,50,0,0
+0.400000,adaptive,strategic - bayesian,attacker_payoff,50,0.812990,0.703342,0.922638,49,1,0
+0.800000,adaptive,strategic - naive,attacker_payoff,50,1.853570,1.738988,1.968152,50,0,0
+0.800000,adaptive,strategic - bayesian,attacker_payoff,50,0.420510,0.338982,0.502038,44,6,0

@@ -32,6 +32,7 @@ The full specification is in [DESIGN.md](DESIGN.md).
 | Naive attacker | Empirical trap rate per (server, defense level) cell; untested cells are assumed safe |
 | Bayesian attacker | Beta posterior per cell with an informed prior (mean T/N); Thompson sampling |
 | Strategic attacker | Models the adaptive defender's lure rule and averages that prediction with the Bayesian posterior mean |
+| Learned strategic attacker | Not given the defender's rule; learns per (server, defended?, own attack-pressure bin) whether traps follow its attacks (E10) |
 | Omniscient attacker | Knows the defender's current mixed strategy and best-responds exactly (benchmark) |
 
 The variants `bayesian_uniform` and `strategic_uniform` use a uniform Beta(1, 1) prior instead of the informed prior.
@@ -48,7 +49,7 @@ The variants `bayesian_uniform` and `strategic_uniform` use a uniform Beta(1, 1)
 | `security_game/defenders.py` | SSE and adaptive defenders |
 | `security_game/attackers.py` | Random, naive, Bayesian, strategic, omniscient attackers |
 | `security_game/game.py` | Repeated game loop, per-run summary metrics, command-line single run |
-| `security_game/experiments.py` | Experiments E1-E6, paired comparisons, figures, summary tables |
+| `security_game/experiments.py` | Experiments E1-E10, paired comparisons, figures, summary tables |
 | `tests/` | pytest suite |
 | `results/` | Experiment outputs (CSV, PNG, summary.md) |
 | `extras/live_demo/` | Archived earlier prototype (see below) |
@@ -97,18 +98,18 @@ python -m security_game.experiments
 python -m security_game.experiments --quick --out results_quick
 ```
 
-Defender names: `sse`, `adaptive`. Attacker names: `random`, `naive`, `bayesian`, `bayesian_uniform`, `strategic`, `strategic_uniform`, `omniscient`.
+Defender names: `sse`, `adaptive`. Attacker names: `random`, `naive`, `bayesian`, `bayesian_uniform`, `strategic`, `strategic_uniform`, `omniscient`, `strategic_learned`.
 
-The full experiment run took about 8 minutes (465 s) on the development laptop (single process). The quick run takes a few seconds.
+The full experiment run (E1-E10) took about 6.5 minutes (389 s) on the development laptop (single process). The quick run takes about 15 seconds.
 
 ## Outputs
 
 `python -m security_game.experiments` writes to `results/`:
 
 - `config.json`: parameters, seeds, rounds, and the SSE values used.
-- Per-seed and summary CSV files for E1 (main grid), E3 (value of traps), and E6 (memory robustness); a per-round summary for E2 (learning over time); `paired_comparisons.csv`.
-- `summary.md`: auto-generated tables of the main numbers.
-- Figures `fig_e1a` to `fig_e6` (PNG, 150 dpi) with 95% confidence intervals.
+- Per-seed and summary CSV files for E1 (main grid), E3 (value of traps), E6 (memory robustness), E7 (misspecified strategic attacker), E8 (per-server target selection), E9 (naive memory diagnostic), and E10 (learned strategic attacker); a per-round summary for E2 (learning over time); `paired_comparisons.csv`, `e7_paired_comparisons.csv` and `e10_paired_comparisons.csv` (seed-paired differences); `e10_within_server_seeds.csv` and `e10_within_server_summary.csv` (within-server learned dependence of the learned strategic attacker).
+- `summary.md`: auto-generated tables of the main numbers, including the E7, E8, E9 and E10 tables.
+- Figures `fig_e1a` to `fig_e6`, `fig_e7_misspecified.png` (strategic attacker payoff vs the smoothing rate it assumes for the adaptive defender) and `fig_e8_targets.png` (attack-unit share per server per attacker, with the SSE equilibrium response), `fig_e10_payoff.png` (attacker payoff of naive, bayesian, learned strategic, strategic and omniscient) and `fig_e10_learned_dependence.png` (trap probability the learned strategic attacker assigns to undefended cells by its own attack-pressure bin) (PNG, 150 dpi) with 95% confidence intervals. E9 is a table only.
 
 See DESIGN.md, Section 8, for what each experiment and file contains.
 

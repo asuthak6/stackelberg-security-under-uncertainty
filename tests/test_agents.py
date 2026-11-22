@@ -203,3 +203,89 @@ def test_allocation_values_match_payoff_formula():
     values = a.allocation_values(levels, np.zeros_like(levels))
     for j, attack in enumerate(a.allocations):
         assert values[j] == pytest.approx(expected_payoffs(CFG, defense, (), attack)[0])
+
+
+# --- strategic attacker with a (mis)specified model of the defender ----------
+
+class _OldStrategic(StrategicAttacker):
+    """The strategic attacker as written before model_rate/model_floor existed."""
+
+    def predicted_cells(self):
+        from security_game.defenders import TRAP_FLOOR
+        w = self.freq + TRAP_FLOOR
+        q = np.minimum(1.0, self.cfg.traps * w / w.sum())
+        pred = np.zeros((self.cfg.n, self.cfg.defense_units + 1))
+        pred[:, 0] = np.minimum(1.0, q / self.defense_level_probs()[:, 0])
+        return pred
+
+    def observe(self, o):
+        from security_game.defenders import SMOOTHING
+        BayesianAttacker.observe(self, o)
+        total = sum(o.attack)
+        if total > 0:
+            share = np.asarray(o.attack, dtype=float) / total
+            self.freq = (1.0 - SMOOTHING) * self.freq + SMOOTHING * share
+
+
+# Total attacker payoff and attack units per server over 200 rounds, computed with
+# the code before model_rate/model_floor were added (git HEAD 6ed3c65).
+OLD_STRATEGIC_RUNS = {
+    ("sse", "strategic", 0): (76.0, (388, 304, 108, 0)),
+    ("sse", "strategic_uniform", 0): (-21.0, (12, 8, 0, 0)),
+    ("sse", "strategic", 1): (75.0, (406, 252, 142, 0)),
+    ("sse", "strategic_uniform", 1): (97.0, (404, 348, 12, 0)),
+    ("adaptive", "strategic", 0): (56.0, (332, 264, 200, 4)),
+    ("adaptive", "strategic_uniform", 0): (-16.0, (8, 4, 0, 0)),
+    ("adaptive", "strategic", 1): (228.0, (324, 278, 190, 8)),
+    ("adaptive", "strategic_uniform", 1): (-7.0, (12, 4, 0, 0)),
+}
+
+
+@pytest.mark.parametrize("key", sorted(OLD_STRATEGIC_RUNS))
+def test_strategic_defaults_reproduce_old_runs(key):
+    from security_game.game import make_attacker, make_defender, play
+    defender, attacker, seed = key
+    d = make_defender(defender, CFG)
+    logs = play(CFG, d, make_attacker(attacker, CFG, d), 200, seed)
+    payoff, units = OLD_STRATEGIC_RUNS[key]
+    assert sum(log.attacker_payoff for log in logs) == pytest.approx(payoff, abs=1e-9)
+    assert tuple(sum(log.attack[i] for log in logs) for i in range(CFG.n)) == units
+
+
+@pytest.mark.parametrize("defender", ["sse", "adaptive"])
+@pytest.mark.parametrize("prior", ["informed", "uniform"])
+def test_strategic_defaults_match_old_rule_round_by_round(defender, prior):
+    from security_game.game import make_defender, play
+    runs = []
+    for make in (lambda: StrategicAttacker(CFG, prior=prior),
+                 lambda: StrategicAttacker(CFG, prior=prior, model_rate=0.2,
+                                           model_floor=0.05),
+                 lambda: _OldStrategic(CFG, prior=prior)):
+        d = make_defender(defender, CFG)
+        runs.append(play(CFG, d, make(), 150, 7))
+    assert runs[0] == runs[1] == runs[2]
+
+
+def test_strategic_model_rate_sets_its_frequency_update():
+    a = StrategicAttacker(CFG, model_rate=0.8)
+    a.observe(obs((2, 1, 1, 0), (4, 0, 0, 0), traps=(3,)))
+    assert np.allclose(a.freq, [0.2 * 0.25 + 0.8, 0.05, 0.05, 0.05])
+    a.observe(obs((2, 1, 1, 0), (0, 0, 0, 0), traps=(3,)))  # no attack: unchanged
+    assert np.allclose(a.freq, [0.2 * 0.25 + 0.8, 0.05, 0.05, 0.05])
+
+
+def test_strategic_model_floor_flattens_prediction():
+    sharp = StrategicAttacker(CFG, model_floor=0.0)
+    flat = StrategicAttacker(CFG, model_floor=10.0)
+    for a in (sharp, flat):
+        for _ in range(5):
+            a.observe(obs((2, 2, 0, 0), (0, 0, 4, 0), traps=(2,)))
+    spread = lambda a: np.ptp(a.predicted_cells()[:, 0] * a.defense_level_probs()[:, 0])
+    assert spread(sharp) > spread(flat)
+
+
+@pytest.mark.parametrize("kwargs", [{"model_rate": 0.0}, {"model_rate": 1.5},
+                                    {"model_floor": -0.1}])
+def test_strategic_invalid_model_rejected(kwargs):
+    with pytest.raises(ValueError):
+        StrategicAttacker(CFG, **kwargs)

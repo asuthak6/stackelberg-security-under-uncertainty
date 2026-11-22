@@ -1,0 +1,12 @@
+memory,defender,comparison,metric,learned_mean,baseline_mean,n,mean_diff,ci_low,ci_high,seeds_first_higher,seeds_second_higher,ties
+50,sse,strategic_learned - naive,attacker_payoff,0.132850,0.414090,50,-0.281240,-0.359069,-0.203411,10,40,0
+50,sse,strategic_learned - bayesian,attacker_payoff,0.132850,0.283240,50,-0.150390,-0.247385,-0.053395,16,34,0
+50,sse,strategic_learned - strategic,attacker_payoff,0.132850,0.374720,50,-0.241870,-0.348143,-0.135597,13,37,0
+50,sse,strategic_learned - omniscient,attacker_payoff,0.132850,0.385800,50,-0.252950,-0.345119,-0.160781,12,38,0
+50,adaptive,strategic_learned - naive,attacker_payoff,0.089420,-1.607900,50,1.697320,1.586456,1.808184,50,0,0
+50,adaptive,strategic_learned - bayesian,attacker_payoff,0.089420,-0.174840,50,0.264260,0.163315,0.365205,37,13,0
+50,adaptive,strategic_learned - strategic,attacker_payoff,0.089420,0.622640,50,-0.533220,-0.644404,-0.422036,4,46,0
+50,adaptive,strategic_learned - omniscient,attacker_payoff,0.089420,1.143160,50,-1.053740,-1.155012,-0.952468,0,50,0
+200,adaptive,strategic_learned - naive,attacker_payoff,0.537340,-0.704270,50,1.241610,1.127829,1.355391,50,0,0
+200,adaptive,strategic_learned - bayesian,attacker_payoff,0.537340,0.030800,50,0.506540,0.394713,0.618367,45,5,0
+200,adaptive,strategic_learned - strategic,attacker_payoff,0.537340,0.829640,50,-0.292300,-0.399912,-0.184688,13,37,0

@@ -165,11 +165,24 @@ All learning attackers (Naive, Bayesian, Strategic) use the same decision step:
 | Naive | level 0 | traps_iL / attacks_iL; untested cells count as safe (pi_iL = 0) |
 | Bayesian explorer | belief-based | Beta(alpha_0 + traps_iL, beta_0 + attacks_iL - traps_iL) per cell; each round samples pi_iL from the posterior (Thompson sampling), so it retests uncertain cells |
 | Strategic | level 2 | Models the defender as adaptive (see below) and averages that prediction with the Bayesian posterior mean of the cell |
+| Strategic (learned) | level 2, learned | Not given any defender rule. Beta posterior per cell (server i, defended?, its own attack-pressure bin on i); Thompson sampling (see below) |
 | Omniscient | benchmark | Knows the defender's current true mixed strategy and best-responds exactly using the payoff matrix |
 
 **Trap prior.** The number of traps T and servers N are part of the game rules, so the attacker knows the base trap rate T/N. The Bayesian and strategic attackers therefore use an informed prior per cell with mean T/N and strength 4: Beta(alpha_0, beta_0) = Beta(4 T/N, 4 (1 - T/N)), which is Beta(1, 3) with default parameters. If T = 0, every learning attacker sets every pi_iL to 0; if T = N, the Bayesian and strategic attackers set every pi_iL to 1 (the Beta prior is undefined at both extremes). As an ablation, the variants "bayesian_uniform" and "strategic_uniform" use the uninformative prior Beta(1, 1).
 
 **Strategic attacker.** Keeps its own smoothed attack frequency g_i (rate 0.2, initial uniform, same update as the adaptive defender). It predicts the per-server trap probability q_i = min(1, T (g_i + 0.05) / sum_j (g_j + 0.05)). Because it models the lure rule (traps sit on undefended servers), it converts this to cells: predicted pi_i0 = min(1, q_i / P(d_i = 0)) and predicted pi_iL = 0 for L >= 1. Its final pi_iL is the average of the prediction and the Bayesian posterior mean (alpha_0 + traps_iL) / (alpha_0 + beta_0 + attacks_iL).
+
+The smoothing rate and the floor in this model are constructor parameters, `model_rate` (default 0.2) and `model_floor` (default 0.05). They are used only in the attacker's prediction of the defender; the defaults equal the adaptive defender's true constants, so by default the model is correctly specified. E7 varies `model_rate` to test a misspecified model.
+
+**Learned strategic attacker ("strategic_learned").** A level-2 attacker that is not given the defender's rule: it imports nothing from the defender code and assumes no defender rule, and must learn from experience whether and how the defender reacts to its attacks.
+
+- *Own attack pressure.* It keeps an exponentially smoothed share of its own attack units per server, g_i, initial 1/N, updated after each round from its own attack with its own rate 0.3 (`LEARNED_PRESSURE_RATE`; the attacker's own modelling choice, not the defender's rate). A round with no attack leaves g unchanged.
+- *Pressure bins.* Low if g_i < 0.15, medium if 0.15 <= g_i <= 0.35, high if g_i > 0.35 (`PRESSURE_LOW`, `PRESSURE_HIGH`). With N = 4 the initial g_i = 0.25 is medium.
+- *Cells.* (server i, defended? = defense level >= 1, pressure bin of i at the time the attack was chosen). Each remembered observation stores the bins it was chosen under, so the memory window W works as for the other learners. Counts come from remembered rounds in which i was attacked.
+- *Beliefs.* Beta posterior per cell with the same informed prior as the Bayesian attacker, Beta(4 T/N, 4 (1 - T/N)), and the same T = 0 / T = N handling. Requires c = 1.
+- *Decision.* Each round it takes each server's current bin, Thompson-samples pi for the (i, undefended) and (i, defended) cells at that bin, sets pi_i0 to the undefended sample and pi_iL (L >= 1) to the defended sample, and applies the common decision step (Section 6.1) with the same defense-level estimate and tie-breaking.
+
+If traps follow its attacks (as with the adaptive defender), its high-pressure undefended cells should learn a high trap probability, so it backs off servers it has been hitting while they look soft. If traps do not depend on its attacks (SSE defender), the bins should look alike.
 
 **Omniscient attacker.** Computes the expected attacker payoff of every allocation under the defender's current mixed strategy. Among allocations within 1e-9 of the best attacker value, it picks the one with the highest defender value; remaining ties are broken at random. This defender-favourable tie-breaking reproduces the Strong Stackelberg Equilibrium against the SSE defender.
 
@@ -180,6 +193,7 @@ All learning attackers (Naive, Bayesian, Strategic) use the same decision step:
 | 0 | Naive attacker | Goes where defense looks weak |
 | 1 | Adaptive defender | Traps where the attacker goes and keeps that server looking weak |
 | 2 | Strategic attacker | Expects the level-1 defender and treats weak-looking, frequently hit servers as likely traps |
+| 2 (learned) | Learned strategic attacker | Not told the level-1 rule; learns from experience whether servers it has been hitting hard are trapped more often when they look soft |
 
 ## 7. Solver
 
@@ -197,7 +211,7 @@ Implemented in `security_game/experiments.py` and run with `python -m security_g
 
 ### 8.1 Agents and metrics
 
-Attackers: random, naive, bayesian, bayesian_uniform, strategic, strategic_uniform, omniscient. Defenders: sse, adaptive. Per-seed metrics:
+Attackers: random, naive, bayesian, bayesian_uniform, strategic, strategic_uniform, omniscient (E1 grid); strategic_learned (E10 only). Defenders: sse, adaptive. Per-seed metrics:
 
 | Metric | Definition |
 |---|---|
@@ -212,6 +226,8 @@ Attackers: random, naive, bayesian, bayesian_uniform, strategic, strategic_unifo
 
 `summarize()` also reports the defended takedown rate (takedowns per attack on a defended server); it is shown by the game CLI and not used in the experiment tables.
 
+With `per_server=True` (used by the experiments), `summarize()` also reports, for each server i = 1..N, `attack_unit_share_s{i}` (share of all attack units over the run sent to server i; NaN if the attacker never attacked) and `attack_rate_s{i}` (share of rounds in which server i was attacked at all). These are used in E8.
+
 ### 8.2 Experiments
 
 | ID | Question | Setup | Output |
@@ -222,6 +238,10 @@ Attackers: random, naive, bayesian, bayesian_uniform, strategic, strategic_unifo
 | E4 | Prior sensitivity | bayesian vs bayesian_uniform and strategic vs strategic_uniform, both defenders; attacker payoff and attack share (E1 data) | Figure only |
 | E5 | Lure | Undefended attack share and undefended catch rate per attacker and defender (E1 data). Neither defender ever defends a trapped server, so every catch is on an undefended server by construction; the informative quantities are how often each attacker attacks undefended servers and how often that gets it caught | Figure only |
 | E6 | Memory robustness | W in {10, 50, 200}; naive, bayesian, strategic against the adaptive defender; attacker payoff | Per-seed and summary CSV; one figure |
+| E7 | Misspecified strategic attacker | Strategic attacker with `model_rate` in {0.05, 0.1, 0.2, 0.4, 0.8} (the adaptive defender's true rate stays 0.2; `model_floor` stays 0.05), against both defenders, same seeds as E1. The 0.2 cell is the E1 strategic run. Metrics: attacker payoff (mean, 95% CI) and seed-paired differences in attacker payoff vs the E1 naive and bayesian runs (mean, 95% CI, seeds won) | Per-seed, summary and paired CSV; one figure (attacker payoff vs `model_rate`, with the naive, bayesian and omniscient E1 values against the same defender as reference lines with 95% bands), one panel per defender |
+| E8 | Target selection | Every attacker x both defenders (E1 runs). Per server: attack-unit share and attack rate (Section 8.1). Compared with the attacker's SSE equilibrium response (0, 0, 0, 3) | Per-seed and summary CSV; one figure (grouped bars: one group per server, one bar per attacker, attack-unit share; marker for the SSE response), one panel per defender |
+| E9 | Naive memory diagnostic | Naive attacker vs the adaptive defender, W in {10, 50, 200} (same runs as E6). Before each round, for each server i: the naive estimate of pi_i0 (0 if the cell is untested) and the true P(trap on i given d_i = 0) under the defender's current mixed strategy. Per seed: mean absolute belief error (all cells, and tested cells only), share of cells untested, share of rounds in which some untested (so assumed safe) level-0 cell has true trap probability above 0.5, undefended attack share, undefended catch rate, attacker payoff | Per-seed and summary CSV; table only |
+| E10 | Learned strategic attacker | strategic_learned against both defenders at W = 50, and against the adaptive defender at W = 200; same seeds and random streams as every other run. Seed-paired differences in attacker payoff (mean, 95% CI, seeds won/lost/tied) vs naive, bayesian, strategic and omniscient (E1 runs) at W = 50, and vs naive, bayesian and strategic (E6 runs) at W = 200. Learned-dependence diagnostic: at the end of each run, the posterior mean trap probability of the undefended cells, averaged over servers with at least one remembered observation in that cell, per pressure bin; mean and 95% CI across the runs that have such a cell (their number is reported). Within-server version: for each server, the learned P(trap | undefended) in one bin minus that in another (medium - low, high - medium, high - low), using only servers observed in both bins, averaged over those servers per run, then across runs; both defenders at W = 50 and W = 200 (the W = 200 SSE runs exist only for this table) | Per-seed, summary and paired CSV; two figures: attacker payoff at W = 50 for naive, bayesian, strategic_learned, strategic, omniscient, and learned trap probability by pressure bin, one panel per defender |
 
 ### 8.3 Paired comparisons
 
@@ -252,10 +272,17 @@ Seed-paired differences (first minus second) with mean, 95% t-interval, and the 
 | `e3_traps_seeds.csv`, `e3_traps_summary.csv` | E3 per seed; summary with equilibrium values per T |
 | `e6_memory_seeds.csv`, `e6_memory_summary.csv` | E6 per seed; summary |
 | `paired_comparisons.csv` | Section 8.3 |
-| `summary.md` | Auto-generated tables (E1, paired comparisons, E3, E6) |
+| `e7_misspecified_seeds.csv`, `e7_misspecified_summary.csv`, `e7_paired_comparisons.csv` | E7 per seed; summary per model rate and defender; seed-paired differences vs naive and bayesian |
+| `e8_targets_seeds.csv`, `e8_targets_summary.csv` | E8 per seed; summary per defender, attacker, server metric |
+| `e9_naive_memory_seeds.csv`, `e9_naive_memory_summary.csv` | E9 per seed; summary per W |
+| `e10_learned_seeds.csv`, `e10_learned_summary.csv`, `e10_paired_comparisons.csv` | E10 per seed (with the learned-dependence values); summary per W and defender; seed-paired differences |
+| `e10_within_server_seeds.csv`, `e10_within_server_summary.csv` | E10 within-server differences per seed (with the number of servers contributing); summary per W and defender |
+| `summary.md` | Auto-generated tables (E1, paired comparisons, E3, E6, E7, E8, E9, E10) |
 | `fig_e1a_attacker_payoff.png`, `fig_e1b_defender_payoff.png`, `fig_e1c_perception_gap.png` | E1 figures |
 | `fig_e2_learning_payoff.png`, `fig_e2_learning_catch.png` | E2 figures |
 | `fig_e3_traps.png`, `fig_e4_prior.png`, `fig_e5_lure.png`, `fig_e6_memory.png` | E3-E6 figures |
+| `fig_e7_misspecified.png`, `fig_e8_targets.png` | E7 and E8 figures (E9 has no figure) |
+| `fig_e10_payoff.png`, `fig_e10_learned_dependence.png` | E10 figures |
 
 Figures are PNG at 150 dpi with 95% error bars or bands. Each attacker has one fixed color in every figure; uniform-prior variants are also hatched, and line charts use a distinct marker per attacker.
 
@@ -289,8 +316,8 @@ Figures are PNG at 150 dpi with 95% error bars or bands. Each attacker has one f
 |---|---|
 | Adaptive defender smoothing rate | 0.2 |
 | Adaptive defender initial attack frequency | Uniform |
-| Trap weight floor (defender and strategic attacker model) | 0.05 |
-| Strategic attacker smoothing rate | 0.2 |
+| Trap weight floor (defender and strategic attacker model) | 0.05 (`model_floor` for the attacker) |
+| Strategic attacker smoothing rate | 0.2 (`model_rate`; varied in E7) |
 | Bayesian / strategic prior on trap rate | Beta(4 T/N, 4 (1 - T/N)) = Beta(1, 3) (informed, default); Beta(1, 1) (uniform ablation) |
 | Defense-level smoothing | Add-one over levels 0..D |
 | Seeds per cell | 50 (paired across cells) |
@@ -298,7 +325,12 @@ Figures are PNG at 150 dpi with 95% error bars or bands. Each attacker has one f
 | Confidence intervals | 95% t-intervals across seeds |
 | Learning-curve rolling window | 25 rounds |
 | Trap counts (E3) | 0, 1, 2 |
-| Memory windows (E6) | 10, 50, 200 |
+| Memory windows (E6, E9) | 10, 50, 200 |
+| Assumed defender smoothing rates (E7) | 0.05, 0.1, 0.2, 0.4, 0.8 |
+| "Unsafe" trap-probability threshold (E9) | 0.5 |
+| Learned strategic attacker: own pressure smoothing rate | 0.3 (attacker's own choice) |
+| Learned strategic attacker: pressure bins | low < 0.15 <= medium <= 0.35 < high |
+| Memory windows (E10) | 50 (both defenders), 200 (adaptive defender) |
 
 ## 11. Limitations
 

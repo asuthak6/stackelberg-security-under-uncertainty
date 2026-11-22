@@ -120,3 +120,52 @@ def test_summarize_nan_when_no_undefended_attacks():
     s = summarize([RoundLog(0, (4, 0, 0, 0), (1,), (1, 0, 0, 0), (B, N, N, N), 0.0, 0.0)])
     assert math.isnan(s["undefended_catch_rate"])
     assert s["defended_takedown_rate"] == 0.0
+
+
+def test_summarize_per_server_hand_counted():
+    C, S, B, N = Outcome.CAUGHT, Outcome.SUCCESS, Outcome.BLOCKED, Outcome.NOT_ATTACKED
+    logs = [
+        RoundLog(0, (2, 1, 1, 0), (3,), (2, 0, 0, 2), (S, N, N, C), 0.0, 0.0),
+        RoundLog(1, (3, 1, 0, 0), (1,), (1, 0, 1, 0), (B, N, B, N), 0.0, 0.0),
+        RoundLog(2, (2, 1, 1, 0), (3,), (0, 0, 0, 0), (N, N, N, N), 0.0, 0.0),
+    ]
+    s = summarize(logs, per_server=True)
+    # 6 units in total: 3 on server 1, 1 on server 3, 2 on server 4.
+    assert [s[f"attack_unit_share_s{i}"] for i in range(1, 5)] == pytest.approx(
+        [3 / 6, 0.0, 1 / 6, 2 / 6])
+    assert [s[f"attack_rate_s{i}"] for i in range(1, 5)] == pytest.approx(
+        [2 / 3, 0.0, 1 / 3, 1 / 3])
+
+
+def test_summarize_unit_shares_nan_without_attacks():
+    N = Outcome.NOT_ATTACKED
+    s = summarize([RoundLog(0, (4, 0, 0, 0), (1,), (0, 0, 0, 0), (N, N, N, N), 0.0, 0.0)],
+                  per_server=True)
+    for i in range(1, 5):
+        assert math.isnan(s[f"attack_unit_share_s{i}"])
+        assert s[f"attack_rate_s{i}"] == 0.0
+
+
+@pytest.mark.parametrize("defender", sorted(DEFENDERS))
+@pytest.mark.parametrize("attacker", ATTACKERS)
+def test_per_server_unit_shares_sum_to_one(defender, attacker):
+    s = summarize(run(defender, attacker, 80, 3), per_server=True)
+    shares = [s[f"attack_unit_share_s{i}"] for i in range(1, CFG.n + 1)]
+    if s["attack_share"] > 0:
+        assert sum(shares) == pytest.approx(1.0)
+        assert all(0.0 <= x <= 1.0 for x in shares)
+    else:
+        assert all(math.isnan(x) for x in shares)
+    for i in range(1, CFG.n + 1):
+        assert 0.0 <= s[f"attack_rate_s{i}"] <= s["attack_share"]
+
+
+def test_before_round_hook_does_not_change_the_game():
+    plain = run("adaptive", "naive", 120, 5)
+    calls = []
+    d = make_defender("adaptive", CFG)
+    a = make_attacker("naive", CFG, d)
+    hooked = play(CFG, d, a, 120, 5, before_round=lambda t: calls.append(
+        (t, d.mixed_strategy().sum(), a.trap_estimates().sum())))
+    assert hooked == plain
+    assert [c[0] for c in calls] == list(range(120))
