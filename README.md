@@ -2,10 +2,9 @@
  
 Does an attacker's limited perception and reasoning style change how well it does against a defender who protects servers and sets honeypot traps? This project models DDoS-style network defense as a **repeated Stackelberg security game**, solves the equilibrium exactly with **linear programming**, and compares seven attacker types against an equilibrium (SSE) defender and an adaptive lure-setting defender over **50 seeds × 500 rounds**.
  
-> Originally developed as a team project for **SE4457 (Foundations of Multiagent Systems)**, Western University, Fall 2026, by [Name], [Name], [Name] and Avanish Suthakaran. Forked from [vekaria04/SE4457-Multiagent-Security-Game](https://github.com/vekaria04/SE4457-Multiagent-Security-Game).
+> Originally developed as a team project for **SE4457 (Foundations of Multiagent Systems)**, Western University, Fall 2026, by Purab Arora, Yash Vekaria, Maheep Wadhwa and Avanish Suthakaran. Forked from [vekaria04/SE4457-Multiagent-Security-Game](https://github.com/vekaria04/SE4457-Multiagent-Security-Game).
 >
-> **My contributions:** [e.g. SSE solver, Bayesian/strategic attackers, experiment harness E1–E10]
- 
+
 ---
  
 ## Key findings
@@ -170,8 +169,4 @@ Written to `results/` (or the `--out` directory):
 `extras/live_demo/` contains an earlier prototype that ran attacker and defender agents against a real loopback HTTP service under DDoS-style load, before the project moved to the analytical game model. It is kept for reference and is not part of the experiments above.
  
 ---
- 
-## License
- 
-[Add once agreed with the original team, e.g. MIT.]
  
